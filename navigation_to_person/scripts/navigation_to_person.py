@@ -2,19 +2,15 @@ import actionlib
 import rospy
 import moveit_commander
 import tf2_ros
-import sensor_msgs.point_cloud2 as pc2
 import numpy as np
 import math
 import tf2_geometry_msgs
 from geometry_msgs.msg import PoseStamped, TransformStamped
-from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from tf.transformations import euler_from_quaternion
 
-from tf.transformations import quaternion_from_euler
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import PointCloud2
 from moveit_msgs.msg import (Constraints, 
                              PositionConstraint, 
@@ -40,13 +36,22 @@ class NavigationToPerson():
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         
+        # 发布人员位姿和导航目标
         self.nav_goal_pub = rospy.Publisher('/nav_goal', PoseStamped, queue_size=10)
         self.person_pose_pub = rospy.Publisher('/person_pose', PoseStamped, queue_size=10)
+        # 头部控制器发布器
+        self.head_pub = rospy.Publisher('/head_controller/command', JointTrajectory, queue_size=10)
+
         # MoveBase Action 客户端
         self.move_base_client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
         rospy.loginfo("Waiting for move_base action server...")
         self.move_base_client.wait_for_server()
         rospy.loginfo("Connected to move_base server")
+
+        self.tracking_timer = rospy.Timer(
+            rospy.Duration(0.2),  # 每隔 0.2s 执行一次 (5Hz)
+            self.head_tracking_cb
+        )
 
     def find_person(self):
         """
@@ -244,7 +249,30 @@ class NavigationToPerson():
         rospy.loginfo(f"Generated detour goal with yaw offset: {math.degrees(angle_offset):.2f} degrees")
         return detour_goal
 
+    def _look_direction(self, positions):
+        head_joint_traj = JointTrajectory()
+        head_joint_traj.joint_names = ["head_1_joint", "head_2_joint"]
+        point = JointTrajectoryPoint()
+        point.positions = positions
+        point.time_from_start = rospy.Duration(0.15)
+        head_joint_traj.points.append(point)
+        self.head_pub.publish(head_joint_traj)
+    
+    def track_person_with_head(self, marker):
+        marker_position = marker.pose.position
+        px, py = marker_position.x, marker_position.y
+        angle = math.atan2(py, px)
+        self._look_direction([angle, 0.0])
 
+    def head_tracking_cb(self, event):
+            """
+            定时器回调函数，用于持续追踪目标。
+            1. 调用 find_person() 查找目标 Marker
+            2. 如果找到，则调用 track_person_with_head() 调整头部
+            """
+            person_marker = self.find_person()
+            if person_marker is not None:
+                self.track_person_with_head(person_marker)
 
     def navigate_to_person(self):
         """
@@ -256,26 +284,27 @@ class NavigationToPerson():
         while not rospy.is_shutdown():
             # 查找人员位置
             person_marker = self.find_person()
+            # if person_marker is None:
+            #     rospy.logwarn("No person marker found. Starting rotation search...")
+            #     for angle in rotation_goals:
+            #         # 计算旋转目标角度（原地旋转）
+            #         rotation_goal = self.get_rotation_goal(angle)
+            #         self.move_base_client.send_goal(rotation_goal)
+            #         finished_within_time = self.move_base_client.wait_for_result(rospy.Duration(10.0))
+
+            #         if finished_within_time and self.move_base_client.get_state() == actionlib.GoalStatus.SUCCEEDED:
+            #             rospy.loginfo("Rotation completed. Retrying to find person...")
+            #             person_marker = self.find_person()
+            #             if person_marker:
+            #                 rospy.loginfo("Person found after rotation.")
+            #                 break
+            #         else:
+            #             rospy.logwarn("Rotation failed or timed out. Retrying...")
+            
+
             if person_marker is None:
-                rospy.logwarn("No person marker found. Starting rotation search...")
-                for angle in rotation_goals:
-                    # 计算旋转目标角度（原地旋转）
-                    rotation_goal = self.get_rotation_goal(angle)
-                    self.move_base_client.send_goal(rotation_goal)
-                    finished_within_time = self.move_base_client.wait_for_result(rospy.Duration(10.0))
-
-                    if finished_within_time and self.move_base_client.get_state() == actionlib.GoalStatus.SUCCEEDED:
-                        rospy.loginfo("Rotation completed. Retrying to find person...")
-                        person_marker = self.find_person()
-                        if person_marker:
-                            rospy.loginfo("Person found after rotation.")
-                            break
-                    else:
-                        rospy.logwarn("Rotation failed or timed out. Retrying...")
-                if person_marker is None:
-                    rospy.logerr("Person not found after rotation search. Exiting.")
-                    break
-
+                    rospy.logerr("Person not found after rotation search.")
+                    
             # 获取导航目标
             goal = self.get_nav_goal(person_marker)
             if goal is None:
@@ -291,7 +320,7 @@ class NavigationToPerson():
                 state = self.move_base_client.get_state()
                 if state == actionlib.GoalStatus.SUCCEEDED:
                     rospy.loginfo("Navigation to person succeeded!")
-                    rospy.sleep(2.0)  # 等待 2 秒后重新导航
+                    rospy.sleep(0.3)  # 等待 0.3 秒后重新导航
                     continue
                 else:
                     rospy.logwarn(f"Navigation failed with state: {state}. Trying detour...")
