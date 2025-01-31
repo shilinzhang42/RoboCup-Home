@@ -51,28 +51,41 @@ class MoveToObject():
             self.head_tracking_cb
         )
 
-    def find_object(self):
+    def find_object(self, max_retries=5, retry_interval=0.5):
         """
         Search the /text_markers topic for a Marker whose text matches any object in self.goal_objects.
         
         :return: The matching Marker object if found, otherwise None.
         """
         target_marker = None
-        try:
-            marker_array_msg = rospy.wait_for_message(
-                self.marker_topic, MarkerArray, timeout=2.0
-            )
-            for marker in marker_array_msg.markers:
-                if marker.text in self.goal_objects:
-                    rospy.loginfo(f"Found target object: {marker.text}")
-                    target_marker = marker
-                    break
-            if not target_marker:
-                rospy.logwarn("No matching object marker found in the MarkerArray.")
-        except rospy.ROSException as e:
-            rospy.logwarn(f"Timeout. No marker received. Error: {e}")
-        
-        return target_marker
+        retries = 0
+
+        while retries < max_retries:
+            try:
+                rospy.loginfo(f"Attempt {retries+1}/{max_retries}: Waiting for /text_markers...")
+                marker_array_msg = rospy.wait_for_message(
+                    self.marker_topic, MarkerArray, timeout=5.0
+                )
+                rospy.loginfo(f"Found {len(marker_array_msg.markers)} markers in /text_markers.")
+                
+                for marker in marker_array_msg.markers:
+                    rospy.loginfo(f"Marker text: {marker.text}")
+                    if marker.text in self.goal_object:
+                        rospy.loginfo(f"Found target object: {self.goal_object}")
+                        target_marker = marker
+                        return target_marker  # find the target object
+
+                rospy.logwarn("No matching target marker found in the MarkerArray.")
+            except rospy.ROSException as e:
+                rospy.logwarn(f"Timeout. No marker received. Error: {e}")
+
+            retries += 1
+            if retries < max_retries:
+                rospy.loginfo(f"Retrying in {retry_interval} seconds...")
+                rospy.sleep(retry_interval)
+
+        rospy.logwarn("Max retries reached. No matching marker found.")
+        return None
     
     def get_robot_pose(self):
         """
