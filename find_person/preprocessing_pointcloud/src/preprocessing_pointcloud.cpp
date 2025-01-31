@@ -10,15 +10,12 @@ PreprocessingPointCloud::PreprocessingPointCloud(
 
 PreprocessingPointCloud::~PreprocessingPointCloud()
 {
-    // 析构逻辑（如果有）
 }
 
 bool PreprocessingPointCloud::initalize(ros::NodeHandle& nh)
 {
   // load rosparams
   point_cloud_sub_ = nh.subscribe(pointcloud_topic_, 10, &PreprocessingPointCloud::cloudCallback, this);
-
-  //#>>>>TODO: advertise the pointcloud for of the table plane
   preprocessed_cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/preprocessed_cloud", 10);
 
   // Most PCL functions accept pointers as their arguments, as such we first set
@@ -40,9 +37,6 @@ void PreprocessingPointCloud::update(const ros::Time& time)
     // apply all preprocessing steps
     if(!preProcessCloud(raw_cloud_, preprocessed_cloud_))
       return;
-
-    //#>>>>TODO: publish both pointclouds obtained by segmentCloud()
-
     sensor_msgs::PointCloud2 preprocessed_cloud_msg;
     pcl::toROSMsg(*preprocessed_cloud_, preprocessed_cloud_msg);
 
@@ -77,7 +71,5 @@ void PreprocessingPointCloud::cloudCallback(const sensor_msgs::PointCloud2ConstP
 {
   // convert ros msg to pcl raw_cloud
   is_cloud_updated_ = true;
-
-  //#>>>>TODO: Convert the msg to the internal variable raw_cloud_ that holds the raw input pointcloud 
   pcl::fromROSMsg(*msg, *raw_cloud_);
 }

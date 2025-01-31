@@ -3,11 +3,7 @@ int main(int argc, char** argv)
 {
   ros::init(argc, argv, "preprocessing_pointcloud");
   ros::NodeHandle nh;
-  
-  //#>>>>TODO: Set the correct topic name of the robot
   std::string pointcloud_topic_name = "/xtion/depth_registered/points";
-
-  //#>>>>TODO: Set the name of a frame on the floor/ground of the robot (height=0)
   std::string base_fame_name = "base_footprint";
 
   // construct the object

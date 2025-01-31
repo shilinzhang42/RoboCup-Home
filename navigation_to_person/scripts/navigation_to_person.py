@@ -344,8 +344,9 @@ class NavigationToPerson():
 
 
 if __name__ == "__main__":
+    distance = rospy.get_param("~safe_distance", 1)
     rospy.init_node("navigation_to_person_node")
-    nav_person = NavigationToPerson(safe_distance=1.0, target_object="person")
+    nav_person = NavigationToPerson(safe_distance=distance, target_object="person")
     try:
         nav_person.navigate_to_person()
     except rospy.ROSInterruptException:
