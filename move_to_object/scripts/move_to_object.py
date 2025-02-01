@@ -21,12 +21,11 @@ from moveit_msgs.msg import (Constraints,
 
 
 class MoveToObject():
-    def __init__(self, safe_distance=0.5, target_objects=["bottle"], final_orientation=[0.0, 0.0]):
+    def __init__(self, safe_distance=0.5, target_objects=["bottle"], final_orientation= 0):
         """
         :param safe_distance: The safe distance to be maintained between the robot and the object (in meters).
         :param target_objects: A list of target object names to be searched for in the /text_markers topic.
-        :param final_orientation: The final orientation to face the object, expressed as [x, y] 
-                                  for calculating the direction angle using atan2(y, x).
+        :param final_orientation: The final orientation to face the object.
         """
         self.safe_distance = safe_distance
         self.goal_objects = target_objects if isinstance(target_objects, list) else [target_objects]
@@ -46,10 +45,10 @@ class MoveToObject():
         rospy.loginfo("Connected to move_base server")
 
         # Timer for continuous head tracking
-        self.tracking_timer = rospy.Timer(
-            rospy.Duration(0.2),
-            self.head_tracking_cb
-        )
+        # self.tracking_timer = rospy.Timer(
+        #     rospy.Duration(0.2),
+        #     self.head_tracking_cb
+        # )
 
     def find_object(self, max_retries=5, retry_interval=0.5):
         """
@@ -62,20 +61,20 @@ class MoveToObject():
 
         while retries < max_retries:
             try:
-                rospy.loginfo(f"Attempt {retries+1}/{max_retries}: Waiting for /text_markers...")
+                # rospy.loginfo(f"Attempt {retries+1}/{max_retries}: Waiting for /text_markers...")
                 marker_array_msg = rospy.wait_for_message(
                     self.marker_topic, MarkerArray, timeout=5.0
                 )
-                rospy.loginfo(f"Found {len(marker_array_msg.markers)} markers in /text_markers.")
+                # rospy.loginfo(f"Found {len(marker_array_msg.markers)} markers in /text_markers.")
                 
                 for marker in marker_array_msg.markers:
                     rospy.loginfo(f"Marker text: {marker.text}")
-                    if marker.text in self.goal_object:
-                        rospy.loginfo(f"Found target object: {self.goal_object}")
+                    if marker.text in self.goal_objects:
+                        rospy.loginfo(f"Found target object: {marker.text}")
                         target_marker = marker
                         return target_marker  # find the target object
 
-                rospy.logwarn("No matching target marker found in the MarkerArray.")
+                # rospy.logwarn("No matching target marker found in the MarkerArray.")
             except rospy.ROSException as e:
                 rospy.logwarn(f"Timeout. No marker received. Error: {e}")
 
@@ -84,7 +83,7 @@ class MoveToObject():
                 rospy.loginfo(f"Retrying in {retry_interval} seconds...")
                 rospy.sleep(retry_interval)
 
-        rospy.logwarn("Max retries reached. No matching marker found.")
+        # rospy.logwarn("Max retries reached. No matching marker found.")
         return None
     
     def get_robot_pose(self):
@@ -157,8 +156,9 @@ class MoveToObject():
         rospy.loginfo(f"dx: {dx:.2f}, dy: {dy:.2f}")
         rospy.loginfo(f"Distance to object: {distance:.2f} m")
 
-        x, y = self.final_orientation
-        final_angle = math.atan2(y, x)
+        
+        final_angle = final_orientation
+        rospy.logwarn(f"Final orientation: {final_angle}")
 
         # If the robot is farther than the safe distance, compute the target position
         if distance > self.safe_distance:
@@ -171,7 +171,7 @@ class MoveToObject():
             final_angle = angle_robot
             rospy.logwarn("Object is too close. Staying at current position.")
 
-        rospy.loginfo(f"Safe distance target: x={nx}, y={ny}")
+        rospy.loginfo(f"Safe distance target: x={self.safe_distance * math.cos(final_angle)}, y={self.safe_distance * math.sin(final_angle)}")
 
         # Set the robot's orientation to face the object
         qz = math.sin(final_angle / 2)
@@ -224,7 +224,7 @@ class MoveToObject():
         """
         self._look_direction([0.0, -angle])
     
-    def look_up(self, angle=0.8):
+    def look_up(self, angle=0):
         """
         Instruct the head to tilt up by a specified angle.
         
@@ -241,7 +241,7 @@ class MoveToObject():
         marker_position = marker.pose.position
         px, py = marker_position.x, marker_position.y
         angle = math.atan2(py, px)
-        self._look_direction([angle, 0.0])
+        self._look_direction([angle, -0.8])
 
     def head_tracking_cb(self, event):
         """
@@ -288,18 +288,20 @@ class MoveToObject():
             else:
                 rospy.logwarn("Navigation to object failed.")
                 return False
-        self.look_up(angle=0.8)
         return True
 
 
 if __name__ == "__main__":
     # Retrieve parameters from the parameter server
-    safe_distance = rospy.get_param("~safe_distance", 0.5)
-    target_object = rospy.get_param("~target_object", ["bottle"])
-    final_orientation = rospy.get_param("~orientation", [0.0, 0.0])
+    safe_distance = 0.8
+    target_object = ["bottle"]
+    final_orientation = 3.14159
+    rospy.loginfo(f"final_orientation: {final_orientation}")
     
     rospy.init_node("move_to_object")
     move_to_object = MoveToObject(safe_distance, target_object, final_orientation)
+    
+    # move_to_object.look_down(angle=0.0)
 
     if move_to_object.navigate_to_object():
         rospy.loginfo("Finished navigation to the object.")
