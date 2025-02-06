@@ -8,8 +8,6 @@ A ROS-based solution for person detection and following using the TIAGo robot pl
 - [Installation](#installation)
 - [Usage](#usage)
 - [Features](#features)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
 - [License](#license)
 
 ## Prerequisites
@@ -37,14 +35,14 @@ A ROS-based solution for person detection and following using the TIAGo robot pl
 3. Install dependencies:
     ```bash
     sudo apt-get update
-    sudo apt-get install ros-noetic
+    sudo apt install ros-noetic-desktop-full
     ```
 
 4. Install darknet_ros:
     ```bash
     cd ~/tiago_ws/src/final_project
     sudo apt-get update
-    sudo apt-get install ros-noetic-darknet-ros
+    git clone --recursive git@github.com:leggedrobotics/darknet_ros.git
     ```
 
 5. Build the workspace:
