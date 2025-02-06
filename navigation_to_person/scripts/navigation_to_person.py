@@ -356,7 +356,7 @@ class NavigationToPerson():
 
 if __name__ == "__main__":
     # Get the safe distance parameter from the launch file
-    distance = rospy.get_param("~safe_distance", 1)
+    distance = 1.5  # Default safe distance
 
     # Initialize the node and NavigationToPerson object
     rospy.init_node("navigation_to_person_node")
